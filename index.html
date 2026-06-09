@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Projector Control Service — Built From Scratch</title>
+<meta name="description" content="An original from-scratch build of a smart-home projector controller: a Raspberry Pi bridges RS232 serial commands to MQTT so a projector can be driven from a dashboard." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --accent:#0891b2; --accent-soft:#e0f4f8; --ink:#16201f; --muted:#5d6b69;
+    --line:#dfe5e3; --bg:#fbfcfb; --card:#ffffff;
+    --serif:'Fraunces',Georgia,serif; --sans:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:0 28px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:var(--mono);font-size:.86em;background:var(--accent-soft);padding:.1em .4em;border-radius:4px;color:#0a6a73}
+  h1,h2,h3{font-family:var(--serif);font-weight:500;line-height:1.15;letter-spacing:-.01em}
+  /* Header */
+  header.hero{padding:88px 0 56px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:.74rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin:0 0 22px}
+  h1{font-size:clamp(2.6rem,6vw,4.1rem);margin:0 0 18px}
+  .lede{font-size:1.22rem;color:var(--muted);max-width:62ch;margin:0 0 28px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:.82rem}
+  .chip{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--muted);background:var(--card)}
+  /* Sections */
+  section{padding:54px 0;border-bottom:1px solid var(--line)}
+  .kicker{font-family:var(--mono);font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+  h2{font-size:clamp(1.7rem,3.4vw,2.3rem);margin:0 0 20px}
+  h3{font-size:1.2rem;margin:0 0 6px}
+  p{margin:0 0 18px;max-width:68ch}
+  .muted{color:var(--muted)}
+  /* Stack grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:8px}
+  .tool{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .tool .t{font-family:var(--mono);font-size:.78rem;color:var(--accent);letter-spacing:.04em;margin-bottom:8px}
+  .tool h3{font-size:1.05rem;font-family:var(--sans);font-weight:600;margin-bottom:6px}
+  .tool p{font-size:.92rem;color:var(--muted);margin:0}
+  /* Pipeline / modules */
+  ol.flow{counter-reset:s;list-style:none;padding:0;margin:24px 0 0}
+  ol.flow li{position:relative;padding:18px 0 18px 56px;border-top:1px solid var(--line)}
+  ol.flow li:before{counter-increment:s;content:counter(s,decimal-leading-zero);position:absolute;left:0;top:18px;font-family:var(--mono);font-size:.8rem;color:var(--accent);border:1px solid var(--line);border-radius:8px;width:38px;height:38px;display:grid;place-items:center;background:var(--card)}
+  ol.flow li h3{font-family:var(--sans);font-size:1.02rem;font-weight:600;margin:0 0 4px}
+  ol.flow li p{margin:0;font-size:.93rem;color:var(--muted)}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.68rem;padding:2px 7px;border-radius:5px;margin-left:8px;vertical-align:middle}
+  .tag.on{background:#e6f7ec;color:#1c7a43}
+  .tag.off{background:#fdecea;color:#b23b2c}
+  /* Callout */
+  .callout{background:var(--accent-soft);border:1px solid #c6e7ef;border-radius:14px;padding:24px 26px;margin-top:8px}
+  .callout p:last-child{margin:0}
+  /* Reflection list */
+  ul.learn{list-style:none;padding:0;margin:8px 0 0}
+  ul.learn li{padding:14px 0 14px 30px;border-top:1px solid var(--line);position:relative;color:var(--muted);max-width:68ch}
+  ul.learn li:before{content:"→";position:absolute;left:0;color:var(--accent);font-family:var(--mono)}
+  ul.learn li b{color:var(--ink);font-weight:600}
+  /* Footer */
+  footer{padding:48px 0 80px}
+  .credit{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .credit .k{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  footer .fine{font-size:.8rem;color:var(--muted);margin-top:22px;text-align:center}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">From-Scratch Build · Home Automation</p>
+    <h1>Projector Control Service</h1>
+    <p class="lede">A small service that lets you drive a projector — power, inputs, keystone, menu navigation — from a smart-home dashboard instead of a fiddly infrared remote. Built from scratch to learn how serial hardware talks to modern home-automation software.</p>
+    <div class="meta">
+      <span class="chip">Python</span><span class="chip">MQTT</span><span class="chip">RS232 serial</span>
+      <span class="chip">Raspberry Pi</span><span class="chip">Home automation</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">What it is</p>
+    <h2>A remote control, reinvented as software</h2>
+    <p>Most projectors expose a hidden control port — an old-fashioned <b>RS232 serial connection</b> that accepts text commands like "power on" or "switch to HDMI 2". This build turns that port into something you can reach from anywhere on your network: a Raspberry Pi listens for messages over <b>MQTT</b>, translates them into the projector's serial command language, and sends them down the wire.</p>
+    <p>The result is a set of buttons and sliders on a home dashboard. Press "power", and the dashboard publishes a message; the Pi receives it and pokes the projector. No line of sight, no lost remote, and every control lives in one place alongside the rest of the room's automation.</p>
+    <div class="callout">
+      <p><b>The core idea I wanted to learn:</b> bridging two worlds that don't speak the same language. MQTT is how modern smart devices gossip; RS232 is decades-old industrial plumbing. A few dozen lines of Python in the middle is all it takes to make one drive the other.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">The stack</p>
+    <h2>Tools under the hood</h2>
+    <p class="muted">The point of this rebuild was the toolchain — the glue between a dashboard click and a hardware command. Here is what each piece actually does.</p>
+    <div class="grid">
+      <div class="tool"><div class="t">messaging</div><h3>MQTT broker</h3><p>A lightweight publish/subscribe bus. The dashboard publishes commands to a topic; the listener subscribes to it. Nothing needs to know anyone's address.</p></div>
+      <div class="tool"><div class="t">bridge</div><h3>Python listener</h3><p>The heart of the build. It subscribes to the command topic and, for each message, writes the matching RS232 byte sequence to the serial port.</p></div>
+      <div class="tool"><div class="t">hardware link</div><h3>USB-to-serial</h3><p>A small adapter that gives the Raspberry Pi an RS232 port. The projector speaks 9600 baud; the adapter shows up as a device file.</p></div>
+      <div class="tool"><div class="t">dashboard</div><h3>Home automation UI</h3><p>Buttons, input selectors and sliders. Each control is wired to publish one MQTT message — the visible face of the whole system.</p></div>
+      <div class="tool"><div class="t">debugging</div><h3>Response reader</h3><p>A second script that just reads everything the projector sends back, so I could verify commands were landing and decode the reply format.</p></div>
+      <div class="tool"><div class="t">reliability</div><h3>systemd service</h3><p>The listener runs as a background service that starts on boot and restarts itself if it crashes — so the projector is always reachable.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">How a button-press travels</p>
+    <h2>From dashboard tap to projector</h2>
+    <p>The whole journey from a tap on the screen to the projector reacting is a short relay race between four pieces:</p>
+    <ol class="flow">
+      <li><h3>Dashboard publishes <span class="tag on">live</span></h3><p>Tapping "HDMI 2" sends a tiny MQTT message to the command topic — just a string naming the action.</p></li>
+      <li><h3>Broker fans out <span class="tag on">live</span></h3><p>The MQTT broker delivers that message to whoever is subscribed — here, the listener on the Raspberry Pi.</p></li>
+      <li><h3>Listener translates <span class="tag on">live</span></h3><p>Python looks up the action in a command table and finds the exact RS232 string the projector expects.</p></li>
+      <li><h3>Serial port fires <span class="tag on">live</span></h3><p>The command is written to the USB-to-serial adapter at 9600 baud, and the projector obeys.</p></li>
+      <li><h3>Reply read back <span class="tag on">live</span></h3><p>The debug reader captures the projector's acknowledgement, confirming the command was understood.</p></li>
+      <li><h3>Two-way state sync <span class="tag off">future</span></h3><p>Reflecting the projector's real status back onto the dashboard. Left as future work in this build.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">What it can do</p>
+    <h2>Every control, in one place</h2>
+    <p>Once the bridge is running, the dashboard exposes the full remote — no IR line of sight required:</p>
+    <ul class="learn">
+      <li><b>Power:</b> turn the projector on or off from anywhere on the network.</li>
+      <li><b>Inputs:</b> switch between HDMI sources with a single button.</li>
+      <li><b>Aspect & geometry:</b> toggle aspect ratio, and nudge keystone and image-shift to square up the picture.</li>
+      <li><b>Menu navigation:</b> up / down / left / right / enter / menu, so the on-screen settings are fully drivable too.</li>
+    </ul>
+    <p class="muted" style="margin-top:18px">All of it flows through one <code>home/serial/command</code> topic — the single seam where the smart-home world meets the projector's serial port.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">Reflection</p>
+    <h2>What building it taught me</h2>
+    <ul class="learn">
+      <li><b>Old protocols never really die.</b> RS232 predates almost everything in a smart home, yet it's still how serious AV gear expects to be controlled. Learning to speak it was the real lesson.</li>
+      <li><b>MQTT is gloriously simple.</b> Publish a string, subscribe to a string. Once that clicked, wiring new buttons became a two-minute job.</li>
+      <li><b>Always build the debug tool too.</b> The little response-reader script saved hours — without seeing the projector's replies I'd have been guessing whether commands arrived.</li>
+      <li><b>"Run it as a service" is a feature.</b> A script that dies silently is useless in a room. Wrapping it in systemd, with auto-restart on boot, is what made it dependable.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="credit">
+      <div class="k">About this build</div>
+      <p style="margin:0">An original, from-scratch build by <b>Andrea</b> — written to learn how a small computer can bridge legacy serial hardware to a modern message bus and home-automation dashboard. Plain HTML/CSS, deployed on GitHub Pages.</p>
+    </div>
+    <p class="fine">Built from scratch by Andrea · one of an ongoing series of learning builds.</p>
+  </div>
+</footer>
+</body>
+</html>
